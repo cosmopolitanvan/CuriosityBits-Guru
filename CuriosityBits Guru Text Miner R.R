@@ -69,7 +69,7 @@ DB_corpus <- DB$content
 # PART OF SPEECH TAGGING 
 sent_token_annotator <- Maxent_Sent_Token_Annotator()
 word_token_annotator <- Maxent_Word_Token_Annotator()
-POS <- NLP::annotate(GOP_corpus, list(DB_corpus, word_token_annotator))
+POS <- NLP::annotate(DB_corpus, list(DB_corpus, word_token_annotator))
 
 #CREATE CORPUS 
 DB_corpus <- VectorSource(DB_corpus)
