@@ -22,8 +22,16 @@ require(openNLP)
 require(rJava)
 require(grid)
 ### -- LOAD DATA -- ###
-db_csv <- read.csv("file:///C:/Users/xxx/xxxx.csv", header = TRUE) # FOR .CSV FILES
-db_sqlite <- dbConnect(RSQLite::SQLite(), dbname="C:/Users/xxx.sqlite") #FOR SQLITE DATABASE
+# FOR .CSV FILES
+db_csv <- read.csv("file:///C:/Users/xxx/xxxx.csv", header = TRUE) 
+
+# FOR .TXT FILES
+fileName <- "file:///C:/Users/XXXX.txt"
+conn <- file(fileName,open="r")
+db_txt <-readLines(conn) 
+
+#FOR SQLITE DATABASE
+db_sqlite <- dbConnect(RSQLite::SQLite(), dbname="C:/Users/xxx.sqlite") 
 selected_db <- dbGetQuery(db_sqlite,"SELECT content, retweeted_status,retweet_count, query  FROM mention") 
 selected_db_nonRT <- selected_db[selected_db$retweeted_status != "THIS IS A RETWEET --> DOUBLE-CHECK JSON", ] #SELECT NON-RTs
 selected_db_rted <- selected_db[selected_db$retweet_count > 1, ] #SELECT RETWEETED TWEETS
