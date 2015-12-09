@@ -66,14 +66,15 @@ DB_corpus <- DB$content
 
 #OPTION 3: PLUG IN FRESHLY COLLECTED DATA FROM R
 
-# PART OF SPEECH TAGGING 
-sent_token_annotator <- Maxent_Sent_Token_Annotator()
-word_token_annotator <- Maxent_Word_Token_Annotator()
-POS <- NLP::annotate(DB_corpus, list(DB_corpus, word_token_annotator))
 
 #CREATE CORPUS 
 DB_corpus <- VectorSource(DB_corpus)
 DB_corpus <- Corpus(DB_corpus)
+
+# PART OF SPEECH TAGGING 
+sent_token_annotator <- Maxent_Sent_Token_Annotator()
+word_token_annotator <- Maxent_Word_Token_Annotator()
+POS <- NLP::annotate(DB_corpus, list(DB_corpus, word_token_annotator))
 
 # CONDUCT TEXT TRANSFORMATION
 DB_corpus <- tm_map(DB_corpus, content_transformer(tolower))
