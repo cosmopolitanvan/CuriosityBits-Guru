@@ -6,6 +6,7 @@
 #install.packages("openNLP")
 #install.packages("NLP")
 #install.packages("rJava")
+#install.packages("fpc")
 #install.packages("openNLPmodels.en", repos = "http://datacube.wu.ac.at/", type = "source")
 
 ### -- LOAD REQUIRED LIBRARIES -- ###
@@ -21,6 +22,9 @@ require(NLP)
 require(openNLP)
 require(rJava)
 require(grid)
+require(fpc) 
+require(cluster) 
+
 ### -- LOAD DATA -- ###
 # FOR .CSV FILES
 db_csv <- read.csv("file:///C:/Users/xxx/xxxx.csv", header = TRUE) 
@@ -29,6 +33,13 @@ db_csv <- read.csv("file:///C:/Users/xxx/xxxx.csv", header = TRUE)
 fileName <- "file:///C:/Users/XXXX.txt"
 conn <- file(fileName,open="r")
 db_txt <-readLines(conn) 
+head(db_txt)   
+tail(db_txt)   
+
+DB_corpus = paste(db_txt, collapse = " ") 
+nchar(DB_corpus) 
+DB_corpus_split <- strsplit(DB_corpus, "ABC News Transcript")[[1]] 
+length(DB_corpus_split) 
 
 #FOR SQLITE DATABASE
 db_sqlite <- dbConnect(RSQLite::SQLite(), dbname="C:/Users/xxx.sqlite") 
@@ -84,8 +95,18 @@ DB_corpus <- tm_map(DB_corpus,stemDocument)
 DB_corpus <- tm_map(DB_corpus,removeWords,stopwords("english"))
 DB_corpus <- tm_map(DB_corpus,removeWords,c("via", "twitter", "retweet", " "))
 
+inspect(DB_corpus[1]) 
 # CREATE DOCUMENT-TERM MATRIX 
 DB_dtm <- DocumentTermMatrix(DB_corpus) # sparse matrix
+
+inspect(DB_dtm[1:10, 1:10]) 
+findFreqTerms(DB_dtm, 200) 
+findAssocs(DB_dtm, "muslim", 0.5) 
+
+DB_dtm.common = removeSparseTerms(DB_dtm, 0.1) 
+DB_dtm.common <- as.matrix(DB_dtm.common) 
+dim(DB_dtm)
+dim(DB_dtm.common)
 
 ### -- WORD FREQUENCY PLOT -- ##
 DB_frequency <- colSums(DB_dtm)
@@ -121,6 +142,33 @@ ggsave(filename="DB_freq.png",dpi=600)
 ### -- CREATE WORDCLOUD -- ###
 DB_words <- names(DB_frequency)
 wordcloud(DB_words[1:50], DB_frequency[1:50], colors=brewer.pal(6,"Dark2"))
+
+### -- WORD CLUSTERING 
+# compute distances
+distMatrix <- dist(scale(DB_dtm.common))
+fit <- hclust(distMatrix, method="ward.D2")
+plot(fit)
+
+### -- DOCUMENT CLUSTERING
+# select terms corresponding
+keywords <- c("gun","kill", "politic", "law", "attack", "graphic")
+# and transpose the reduced term-document matrix
+dtm_t <- as.matrix(DB_dtm)
+dtm_t <- t(dtm_t)
+dtm_t <- dtm_t[keywords,]
+Result <- pamk(dtm_t, krange=2:5,metric = "manhattan")
+# number of clusters identified
+(k <- Result$nc)
+
+# VISUALIZE THE CLUSTER
+layout(matrix(c(1,2),1,2))
+for(k in 1:2){
+  +cl <- which(Result$pamobject$clustering == k)
+  +tdmk <- t(dtm_t[cl,])
+  +v = sort(rowSums(tdmk), decreasing=TRUE)
+  +d = data.frame(word=names(v), freq=v)
+  +wordcloud(d$word, d$freq, min.freq=1, random.color=TRUE,colors="black")}
+layout(matrix(1))
 
 ### -- PRODUCE SEMANTIC NETWORK -- ###
 DB_smn <- coOccurenceNetwork(DB_dtm)
