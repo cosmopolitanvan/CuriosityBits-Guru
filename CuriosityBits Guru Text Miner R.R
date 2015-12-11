@@ -20,6 +20,7 @@ require(ggplot2)
 require(semnet)
 require(NLP)
 require(openNLP)
+require(openNLPmodels.en)
 require(rJava)
 require(grid)
 require(fpc) 
@@ -82,10 +83,18 @@ DB_corpus <- DB$content
 DB_corpus <- VectorSource(DB_corpus)
 DB_corpus <- Corpus(DB_corpus)
 
-# PART OF SPEECH TAGGING 
+# PART OF PART-OF-SPEECH TAGGING 
 sent_token_annotator <- Maxent_Sent_Token_Annotator()
 word_token_annotator <- Maxent_Word_Token_Annotator()
-POS <- NLP::annotate(DB_corpus, list(sent_token_annotator, word_token_annotator))
+pos_tag_annotator <- Maxent_POS_Tag_Annotator()
+
+POS <- annotate(DB_corpus, list(sent_token_annotator, word_token_annotator))
+POS_tg <- annotate(DB_corpus, pos_tag_annotator, POS)
+POS_tg_subset <- subset(POS_tg, type ]] "word")
+tags <- sapply(POS_tg_subset$features, '[[', "POS")
+
+# AN ALTERNATIVE WAY FOR PART-OF-SPEECH TAGGING -- UNINCOPORATED 
+require(koRpus)
 
 # CONDUCT TEXT TRANSFORMATION
 DB_corpus <- tm_map(DB_corpus, content_transformer(tolower))
