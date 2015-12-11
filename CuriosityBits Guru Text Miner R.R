@@ -8,6 +8,11 @@
 #install.packages("rJava")
 #install.packages("fpc")
 #install.packages("openNLPmodels.en", repos = "http://datacube.wu.ac.at/", type = "source")
+#install.packages("devtools")
+#install.packages("stringi")
+#install.packages("topicmodels")
+#library(devtools)
+#install_github("kasperwelbers/semnet")
 
 ### -- LOAD REQUIRED LIBRARIES -- ###
 
