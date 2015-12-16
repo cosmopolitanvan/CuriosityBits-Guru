@@ -1,0 +1,279 @@
+---
+title: "Mining Insights from Text Data - Using the Transcript of Republican Presidential Debate"
+output: html_document
+---
+In this tutorial, I will show you how to use R to summarize texts. You will learn how to load text data into R, perform text cleaning, Part-of-Speech Tagging, stemming, construct document-term matrices, generate word-clouds and run semantic network analyses. 
+
+These R libraries are required:  
+*tm, SnowballC, wordcloud, openNLP, NLP, rJava, fpc, openNLPmodels.en, topicmodels*  
+
+Please install the libraries using the following chunk of codes.  
+
+*install.packages("tm")*  
+*install.packages("SnowballC")*  
+*install.packages("wordcloud")*  
+*install.packages("openNLP")*  
+*install.packages("NLP")*  
+*install.packages("rJava")*    
+*install.packages("fpc")*  
+*install.packages("RSQLite")* 
+*install.packages("devtools")*    
+*install.packages("openNLPmodels.en", repos = "http://datacube.wu.ac.at/", type = "source")*    
+*install.packages("stringi")*    
+*install.packages("topicmodels")*    
+*library(devtools)*  
+*install_github("kasperwelbers/semnet")* 
+
+
+Let's start by loading the required libraries.
+
+```{r message=FALSE, warning = FALSE, results="hide"}
+require(tm)
+require(SnowballC)
+require(wordcloud)
+require(RSQLite)
+require(DBI)
+require(ggplot2)
+require(semnet)
+require(NLP)
+require(openNLP)
+require(openNLPmodels.en)
+require(rJava)
+require(grid)
+require(fpc) 
+require(cluster) 
+```
+
+Next, load the text file. You can replace the URL to get any text files (.txt) hosted on the cloud, or replace it with a path to a local file (i.e., "file:///C:/Users/xxx"). 
+
+R loads the text file line by line. Let's inspect the outcome by looking at the first and the last a few lines.
+
+```{r, warning = FALSE}
+data_on_the_cloud <- "https://weiai-xu-4yn2.squarespace.com/s/Example.txt"
+conn <- file(data_on_the_cloud,open="r")
+raw_text <-readLines(conn) 
+head(raw_text)   
+tail(raw_text)
+```
+
+This text file contains many lines. let's combine all lines. 
+
+```{r}
+DB_corpus = paste(raw_text, collapse = " ")
+DB_corpus <- gsub("’", " ", DB_corpus)
+#let's see how many characters are in the text file
+nchar(DB_corpus)
+```
+
+Now, divide the text data into different documents. This is driven by the interested in knowing what words tend to appear together in the same sentence. So, each sentence is represented as a separate document. And we will split the text data by a period. In the end, we'll have a text corpus which contains 1,994 documents (that is 1,994 sentences).  
+
+```{r}
+# Split the corpus by a period. 
+DB_corpus_split <- strsplit(DB_corpus, "\\.")[[1]] 
+# Let's look at the 10th document (the 10th sentence in the corpus).
+DB_corpus_split[10]
+# Show the number of documents (sentences) in the corpus
+length(DB_corpus_split)
+```
+
+Now, performe a text cleaning. There are many noises in text. For example, prepositions, pronouns and adjective and such are non-content-bearing. They need to be removed. There are also words that you think are irrelavant in the context of your investigation. The following code removes these words. Additionally, it converts all words to the lower case, deletes punctuation and numbers and removes white spaces between words. 
+
+```{r, warning = FALSE}
+DB_corpus_split <- VectorSource(DB_corpus_split)
+DB_corpus_split <- Corpus(DB_corpus_split)
+#convert to the lower case
+DB_corpus_split <- tm_map(DB_corpus_split, content_transformer(tolower))
+#remove punctuation
+DB_corpus_split <- tm_map(DB_corpus_split, removePunctuation) 
+#remove numbers
+DB_corpus_split <- tm_map(DB_corpus_split, removeNumbers) 
+#delete non-content-bearing words using a predefined stop word list.
+DB_corpus_split <- tm_map(DB_corpus_split,removeWords,stopwords("english")) 
+# in the current example of presidential debate transcript, we want to hear substance instead of candidates' names and some common references (such as governor, senator and candidate)
+DB_corpus_split <- tm_map(DB_corpus_split,removeWords,c("applause", "trump", "carson", "rubio", "cruz", "bush", "paul", "fiorina", "kasich", "huckabee", "christie", "jindal", "santorum", "donald", "ben", "marco", "ted", "jeb", "ran", "carly", "john", "mike", "chris", "bobby", "rick", "election", "candidate", "senator", "harwood", "governor", "president", "candidates", "american", "laughter", "going", "go", "question", "lot", "many", "know", "just", "get", "quintanilla")) 
+
+#remove white space between words
+DB_corpus_split <- tm_map(DB_corpus_split,stripWhitespace) 
+
+```
+
+Moving on to Part-of-Speech Tagging (POS Tagging). This is not a necessary step (but is useful for more advanced analyses). POS Tagging is a process of annotating whether a word is a noun, verb, adjective, or adverb. POS Tagging also distinguishes sentences/phrases from words. It can be handy when you are interested in exploring only certain types of words (say, you are only interested in nouns). But, POS Tagging can take very long to complete! So, I am skipping this step for this demo.
+
+```{r, warning = FALSE, eval = FALSE}
+sent_token_annotator <- Maxent_Sent_Token_Annotator()
+word_token_annotator <- Maxent_Word_Token_Annotator()
+pos_tag_annotator <- Maxent_POS_Tag_Annotator()
+
+POS <- NLP::annotate(DB_corpus_split, list(sent_token_annotator, word_token_annotator))
+POS_tg <- NLP::annotate(DB_corpus_split, pos_tag_annotator, POS)
+
+POS_tg_subset <- subset(POS_tg, type=="word")
+tags <- sapply(POS_tg_subset$features, '[[', "POS")
+# let's see the result
+head(tags)
+```
+
+
+Entity extraction is an optional step. It detects whether a word refers to a place, a person or a date. Entity extraction takes time and consumes a lot of memory space. So I will skip this step. 
+
+```{r, eval = FALSE}
+entity_annotator <- Maxent_Entity_Annotator()
+entity_annotator
+POS_entity <- NLP::annotate(test_txt, entity_annotator, POS)
+```
+
+Now, let's do stemming. Stemming is a process of turning a word into its root form. That is, study, studies and studying all become studi. This step is useful but not necessary in all cases. I choose to skip this step for this demo.
+
+```{r, eval = FALSE}
+DB_corpus_split <- tm_map(DB_corpus_split,stemDocument)
+```
+
+We are ready now to construct a document-term matrix (https://en.wikipedia.org/wiki/Document-term_matrix). This is an essential step to build semantic networks and word-clouds in later steps.
+
+```{r, warning = FALSE}
+DB_dtm <- DocumentTermMatrix(DB_corpus_split) 
+# look at how the first 10 terms (words) appear in the first 10 documents.  
+inspect(DB_dtm[1:10, 1:10]) 
+```
+
+You will see many zeros. That's common -- most terms appear only once. Let's check what terms appear at least 30 times. 
+
+```{r}
+findFreqTerms(DB_dtm, 30) 
+```
+
+We can also explore associations between terms. We can ask R to list terms associated with "tax" (with a correlation coefficient of 0.5 or higher). 
+
+```{r}
+findAssocs(DB_dtm, "tax", 0.5) 
+```
+
+If we are dealing with a large corpus, it is better to remove sparse terms (terms that rarely occur in the corpus). In the following, I set sparsity to 0.99, this drops extremely rare terms but preserves the rest. Sparsity ranges from 0 to 1. Setting a lower number removes more infrequent terms. You can use dim() to see the effect of removal. The original document-term matrix is 1994 by 2405 (meaning that there are 1994 documents or sentences, and 2405 terms). After the removal, there are only 85 terms left.  
+
+```{r}
+DB_dtm.common = removeSparseTerms(DB_dtm, 0.99) #
+DB_dtm.common <- as.matrix(DB_dtm.common) #
+DB_dtm.mx <- as.matrix(DB_dtm)
+dim(DB_dtm)
+dim(DB_dtm.common)
+```
+
+Let's explore term frequency. First, we ask R to rank 10 most frequent terms. Subsequently, we ask R to make a dataframe containing a list of 10 most frequent terms with corresponding frequency. 
+
+```{r}
+DB_frequency <- colSums(DB_dtm.mx)
+DB_frequency <- sort(DB_frequency, decreasing=TRUE)
+DB_frequency[1:10] # list 10 most frequent terms
+
+DB_wf = data.frame(term=names(DB_frequency),occurrences=DB_frequency)
+DB_wf <- DB_wf[order(-DB_wf$occurrences), ] 
+DB_wf <- DB_wf[1:10,] # produce a dataframe with 10 most frequent terms  
+```
+
+Let's make a frequency table. The frequency plot will be saved as DB_freq.png in your local working directory
+
+```{r}
+p_DB <- ggplot(DB_wf)
+p_DB <- p_DB + geom_bar(stat="identity", aes(reorder(term, -occurrences), occurrences), fill = "#EE5C42", color = "#EE5C42")
+p_DB <- p_DB + theme(axis.text.x=element_text(angle=45, hjust=1))+
+  theme_bw() +
+  theme(panel.background=element_rect(fill="#F0F0F0")) +
+  theme(plot.background=element_rect(fill="#F0F0F0")) +
+  theme(panel.border=element_rect(color="#F0F0F0")) +
+  theme(panel.grid.major=element_line(color="#D0D0D0",size=.75)) +
+  theme(axis.ticks=element_blank()) +
+  theme(legend.position="none") +
+  ggtitle("THE MOST FREQUENT TERMS") +
+  theme(plot.title=element_text(face="bold",hjust=-.08,vjust=2,color="#535353",size=16)) +
+  ylab("FREQUENCY") +
+  xlab("KEYWORDS") +
+  theme(axis.text.x=element_text(size=12,color="#535353",face="bold")) +
+  theme(axis.text.y=element_text(size=10,color="#535353",face="bold")) +
+  theme(axis.title.y=element_text(size=10,color="#535353",face="bold",vjust=1.5)) +
+  theme(axis.title.x=element_text(size=10,color="#535353",face="bold",vjust=-.5)) +
+  theme(plot.margin = unit(c(1, 1, .5, .7), "cm")) 
+p_DB
+ggsave(filename="DB_freq.png",dpi=600)
+```
+
+Let's create a word-cloud to list 50 most frequent keywords. 
+
+```{r, warning = FALSE}
+DB_words <- names(DB_frequency)
+wordcloud(DB_words[1:50], DB_frequency[1:50], colors=brewer.pal(6,"Dark2"))
+```
+
+Now, let's make a semantic network based on co-occurrence. That means two terms are connected when they appear in the same sentence. The following codes generate such a network. 
+
+```{r, warning=FALSE, results = "hide"}
+DB_smn <- coOccurenceNetwork(DB_dtm)
+V(DB_smn)$name 
+DB_smn_degree <- igraph::degree(DB_smn)
+DB_smn_Sorted <-sort.int(DB_smn_degree,decreasing=TRUE,index.return=FALSE)
+DB_smn_top <- DB_smn_Sorted[1:50] # only show 50 top terms by degree centrality
+DB_smn_top_name <- names(DB_smn_top)
+DB_network <- induced.subgraph(DB_smn, DB_smn_top_name, impl = "copy_and_delete")
+summary(DB_network)
+```
+
+Let's visualize the network. You can tweak parameters to change color, font size and layout of the network visualization. Nodes in the network are sized by term frequency.  
+
+```{r}
+glay = layout.fruchterman.reingold(DB_network)
+par(bg="gray15", mar=c(1,1,1,1))
+plot(DB_network, layout=glay,
+     vertex.color="#A80533", # find Hex Color Codes here at http://www.colorpicker.com/color-chart/
+     vertex.frame.color = "#A80533",
+     vertex.size=V(DB_network)$freq*0.1,
+     vertex.label.family="sans",
+     vertex.shape="none",
+     vertex.label.color= hsv(h=0, s=0, v=.95, alpha=0.5),
+     vertex.label.cex=V(DB_network)$freq*0.013,
+     edge.width = 0.1,
+     edge.lty = "solid",
+     edge.curved = TRUE,
+     edge.arrow.size=0.8,
+     edge.arrow.width=0.5,
+     edge.color= "#A80533")
+title("SEMANTIC NETWORK",
+      cex.main=1, col.main="gray95")
+ggsave(filename="DB_semantic_net.png",dpi=600)
+```
+
+Another type of semantic network is a term's ego-network. This network includes a target term, and all other terms connected to the target. The network also includes associations between all terms connected to the target. Let's take a look at the term "obama". 
+
+```{r, warning=FALSE, results="hide"}
+### -- LOOK AT TARGET WORDS -- ###
+DB_target_words <- c("obama")
+DB_egonet <- neighborhood(DB_smn, order = 1, nodes = DB_target_words, mode = "all",mindist = 0)
+DB_egonet_target <- induced.subgraph(DB_smn, DB_egonet[[1]], impl = "create_from_scratch")
+DB_egonet_smn_degree <- igraph::degree(DB_egonet_target)
+V(DB_egonet_target)$size <- degree(DB_egonet_target)
+DB_egonet_smn_Sorted <- sort.int(DB_egonet_smn_degree,decreasing=TRUE,index.return=FALSE)
+DB_egonet_smn_top <- DB_egonet_smn_Sorted[1:20] #show top 20 terms by degree centrality
+DB_egonet_target_top <- induced.subgraph(DB_egonet_target, names(DB_egonet_smn_top), impl = "create_from_scratch")
+```
+
+Let's visualize the network. Nodes in the network are sized to term frequency. 
+
+```{r}
+glay = layout.fruchterman.reingold(DB_egonet_target_top)
+par(bg="gray15", mar=c(1,1,1,1))
+plot(DB_egonet_target_top, layout=glay,
+     vertex.color="#A80533",
+     vertex.frame.color = "#A80533",
+     vertex.label.family="sans",
+     vertex.shape="none",
+     vertex.label.color= hsv(h=0, s=0, v=.95, alpha=0.5),
+     vertex.label.cex= V(DB_egonet_target_top)$freq*0.02,
+     edge.width = 0.1,
+     edge.lty = "solid",
+     edge.curved = TRUE,
+     edge.arrow.size=0.1,
+     edge.arrow.width=0.1,
+     edge.color= "#A80533")
+title("THE TARGET TERM NETWORK",
+      cex.main=1, col.main="gray95")
+ggsave(filename="DB_target_semantic_net.png",dpi=600)
+```
+
